@@ -54,6 +54,61 @@ def init_spark_session():
     return spark
 
 
+def handle_time_anomalies(df):
+    """
+    处理时间型特征异常：识别并移除请求时间晚于到场时间的异常记录
+    """
+    total_records = df.count()
+    # 筛选出请求时间 <= 到场时间的记录
+    df_valid_time = df.filter(col("request_datetime") <= col("on_scene_datetime"))
+    valid_records = df_valid_time.count()
+    
+    anomaly_count = total_records - valid_records
+    anomaly_ratio = anomaly_count / total_records * 100 if total_records > 0 else 0
+    
+    print(f"时间异常处理：总记录数 {total_records}")
+    print(f"请求时间晚于到场时间的异常记录数：{anomaly_count} ({anomaly_ratio:.2f}%)")
+    print(f"处理后保留的有效记录数：{valid_records}")
+    
+    return df_valid_time
+
+
+def handle_numeric_anomalies(df, numeric_cols):
+    """
+    IQR
+    """
+    df_clean = df
+    total_records = df_clean.count()
+    
+    for col_name in numeric_cols:
+        quantiles = df_clean.approxQuantile(col_name, [0.25, 0.75], 0.01)
+        q1, q3 = quantiles[0], quantiles[1]
+        iqr = q3 - q1
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        
+        before_count = df_clean.count()
+        
+        df_clean = df_clean.filter(
+            (col(col_name) >= lower_bound) & (col(col_name) <= upper_bound)
+        )
+        
+        anomaly_count = before_count - df_clean.count()
+        anomaly_ratio = anomaly_count / before_count * 100 if before_count > 0 else 0
+        
+        print(f"{col_name} 异常值处理：")
+        print(f"  四分位范围: [{lower_bound:.2f}, {upper_bound:.2f}]")
+        print(f"  异常值数量: {anomaly_count} ({anomaly_ratio:.2f}%)")
+        print(f"  处理后记录数: {df_clean.count()}")
+    
+    final_ratio = (total_records - df_clean.count()) / total_records * 100 if total_records > 0 else 0
+    print(f"\n数值型特征异常处理完成：")
+    print(f"总记录数从 {total_records} 减少到 {df_clean.count()}")
+    print(f"总异常值比例：{final_ratio:.2f}%")
+    
+    return df_clean
+
+
 def load_and_preprocess_data(spark, data_dir, sample_ratio=0.01):
     """Load and preprocess data, return the final encoded DataFrame"""
     parquet_files = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.endswith(".parquet")]
@@ -73,6 +128,9 @@ def load_and_preprocess_data(spark, data_dir, sample_ratio=0.01):
     for df in sampled_dfs[1:]:
         df_combined = df_combined.unionByName(df)
     print(f"Total sampled rows after merging: {df_combined.count()}")
+
+    # 处理时间异常：请求时间晚于到场时间的记录
+    df_combined = handle_time_anomalies(df_combined)
 
     weather_df = spark.read \
         .format("csv") \
@@ -169,12 +227,22 @@ def load_and_preprocess_data(spark, data_dir, sample_ratio=0.01):
 
     df_final_encoded = df_final_encoded.select(key_columns)
     df_final_encoded = df_final_encoded.withColumn(
-    "wait_minutes",
-    F.round(
-        (F.unix_timestamp("on_scene_datetime") - F.unix_timestamp("request_datetime")) / 60.0,
-        1
+        "wait_minutes",
+        F.round(
+            (F.unix_timestamp("on_scene_datetime") - F.unix_timestamp("request_datetime")) / 60.0,
+            1
+        )
     )
-)
+    
+    numeric_features = [
+        "weather_code", "temp_num", "wind_num", 
+        "humidity_num", "barometer_num", "visibility_num",
+        "request_hour", "weekday", "trip_month",
+        "wait_minutes"
+    ]
+    
+    df_final_encoded = handle_numeric_anomalies(df_final_encoded, numeric_features)
+    
     return df_final_encoded, weather_mapping
 
 
