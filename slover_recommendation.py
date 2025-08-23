@@ -10,31 +10,15 @@ Integrates data preprocessing and neural network recommendation model, implement
 """
 
 import os
-import sys
 import shutil
-from datetime import datetime, timedelta
-import argparse
-
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
 import geopandas as gpd
-import pandas as pd
-
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.functions import (col, hour, dayofweek, month, when, count, avg,
                                    regexp_extract, create_map, lit, unix_timestamp)
-from pyspark.ml import Pipeline
-from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
-from pyspark.ml.evaluation import RegressionEvaluator
 
 
 def init_spark_session():
@@ -273,8 +257,7 @@ def plot_feature_histograms(df, features, bins=30, save_path="特征分布直方
     :param bins: Number of histogram bins
     :param save_path: Image save path
     """
-    import matplotlib.pyplot as plt
-    import numpy as np
+
     
     num_features = len(features)
     if num_features == 0:
