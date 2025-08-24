@@ -1,14 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Spark-based "When-to-Hail" Recommendation with Neural Network
------------------------------------------------------------
-Integrates data preprocessing and neural network recommendation model, implementing:
-1. Preserving original data loading, cleaning and feature engineering
-2. GPU-based waiting time prediction model training (neural network)
-3. Ride-hailing time recommendation based on predictions
-4. Result visualization and model saving
-"""
-
 import os
 import shutil
 import matplotlib.pyplot as plt
@@ -40,26 +30,26 @@ def init_spark_session():
 
 def handle_time_anomalies(df):
     """
-    处理时间型特征异常：识别并移除请求时间晚于到场时间的异常记录
+    Handle time feature anomalies: Identify and remove abnormal records where request time is later than arrival time
     """
     total_records = df.count()
-    # 筛选出请求时间 <= 到场时间的记录
+    # Filter records where request time <= arrival time
     df_valid_time = df.filter(col("request_datetime") <= col("on_scene_datetime"))
     valid_records = df_valid_time.count()
     
     anomaly_count = total_records - valid_records
     anomaly_ratio = anomaly_count / total_records * 100 if total_records > 0 else 0
     
-    print(f"时间异常处理：总记录数 {total_records}")
-    print(f"请求时间晚于到场时间的异常记录数：{anomaly_count} ({anomaly_ratio:.2f}%)")
-    print(f"处理后保留的有效记录数：{valid_records}")
+    print(f"Time anomaly handling: Total records {total_records}")
+    print(f"Abnormal records where request time is later than arrival time: {anomaly_count} ({anomaly_ratio:.2f}%)")
+    print(f"Valid records retained after handling: {valid_records}")
     
     return df_valid_time
 
 
 def handle_numeric_anomalies(df, numeric_cols):
     """
-    IQR
+    IQR method for handling numeric feature anomalies
     """
     df_clean = df
     total_records = df_clean.count()
@@ -80,15 +70,15 @@ def handle_numeric_anomalies(df, numeric_cols):
         anomaly_count = before_count - df_clean.count()
         anomaly_ratio = anomaly_count / before_count * 100 if before_count > 0 else 0
         
-        print(f"{col_name} 异常值处理：")
-        print(f"  四分位范围: [{lower_bound:.2f}, {upper_bound:.2f}]")
-        print(f"  异常值数量: {anomaly_count} ({anomaly_ratio:.2f}%)")
-        print(f"  处理后记录数: {df_clean.count()}")
+        print(f"{col_name} anomaly handling:")
+        print(f"  Quartile range: [{lower_bound:.2f}, {upper_bound:.2f}]")
+        print(f"  Number of anomalies: {anomaly_count} ({anomaly_ratio:.2f}%)")
+        print(f"  Records after handling: {df_clean.count()}")
     
     final_ratio = (total_records - df_clean.count()) / total_records * 100 if total_records > 0 else 0
-    print(f"\n数值型特征异常处理完成：")
-    print(f"总记录数从 {total_records} 减少到 {df_clean.count()}")
-    print(f"总异常值比例：{final_ratio:.2f}%")
+    print(f"\nNumeric feature anomaly handling completed:")
+    print(f"Total records reduced from {total_records} to {df_clean.count()}")
+    print(f"Total anomaly ratio: {final_ratio:.2f}%")
     
     return df_clean
 
@@ -113,7 +103,7 @@ def load_and_preprocess_data(spark, data_dir, sample_ratio=0.01):
         df_combined = df_combined.unionByName(df)
     print(f"Total sampled rows after merging: {df_combined.count()}")
 
-    # 处理时间异常：请求时间晚于到场时间的记录
+    # Handle time anomalies: records where request time is later than arrival time
     df_combined = handle_time_anomalies(df_combined)
 
     weather_df = spark.read \
@@ -249,7 +239,7 @@ def append_in_batches(df, output_path, batch_size=100):
         batch_df.write.parquet(output_path, mode="append")
         print(f"Batch {i+1}/{num_batches} written, current batch row count: {batch_df.count()}")
 
-def plot_feature_histograms(df, features, bins=30, save_path="特征分布直方图.png"):
+def plot_feature_histograms(df, features, bins=30, save_path="feature_distribution_histograms.png"):
     """
     Plot histograms of specified columns in Spark DataFrame (non-sampled version, optimized for speed)
     :param df: Spark DataFrame
@@ -287,7 +277,7 @@ def plot_feature_histograms(df, features, bins=30, save_path="特征分布直方
     plt.savefig(save_path, dpi=300, bbox_inches="tight", format="png")
     print(f"Feature distribution histograms saved to: {save_path}")
     
-def plot_correlation_heatmap(df, features, target, save_name="特征与等待时间相关性热力图.png"):
+def plot_correlation_heatmap(df, features, target, save_name="feature_vs_wait_time_correlation_heatmap.png"):
     """
     Plot correlation heatmap between features and target variable
     :param df: Spark DataFrame
@@ -361,7 +351,7 @@ def plot_hourly_trend(df_spark, save_path="hourly_wait_trend.png"):
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     print(f"Hourly trend chart saved to: {save_path}")
 
-def plot_top10_avg_wait_by_zone(df_spark, save_path="各地区平均等待时间Top10.png"):
+def plot_top10_avg_wait_by_zone(df_spark, save_path="top10_avg_wait_time_by_zone.png"):
     """
     Plot top 10 bar chart of average wait time by zone (PULocationZone)
     with zone name formatted as ({PUBorough}) PULocationZone
@@ -395,7 +385,7 @@ def plot_top10_avg_wait_by_zone(df_spark, save_path="各地区平均等待时间
     plt.savefig(save_path, dpi=300)
     print(f"Top 10 zones by average wait time chart saved to: {save_path}")
 
-def plot_monthly_wait_trend(df_spark, save_path="月度等待时间趋势.png"):
+def plot_monthly_wait_trend(df_spark, save_path="monthly_wait_time_trend.png"):
     monthly_stats = df_spark.groupBy("trip_month") \
         .agg(F.avg("wait_minutes").alias("avg_wait")) \
         .orderBy("trip_month") \
@@ -410,7 +400,7 @@ def plot_monthly_wait_trend(df_spark, save_path="月度等待时间趋势.png"):
     plt.grid(alpha=0.3)
     plt.savefig(save_path, dpi=300)
 
-def plot_wait_time_geography(avg_wait_by_zone, shapefile_path, save_path="平均等待时间地理分布图.png"):
+def plot_wait_time_geography(avg_wait_by_zone, shapefile_path, save_path="average_wait_time_geographical_distribution.png"):
     """
     Plot geographical distribution heatmap of average wait time by zone
     
@@ -472,7 +462,7 @@ if __name__ == "__main__":
     
     plot_feature_histograms(df_final_encoded, ["weather_code", "temp_num", "wind_num", "humidity_num", "barometer_num", "visibility_num"])
     plot_correlation_heatmap(df_final_encoded, features, 'wait_minutes')
-    plot_hourly_trend(df_spark=df_final_encoded, save_path="工作日与非工作日小时级等待时间趋势图.png" )
-    plot_top10_avg_wait_by_zone( df_spark=df_final_encoded,  save_path="各地区平均等待时间Top10.png"  )
+    plot_hourly_trend(df_spark=df_final_encoded, save_path="weekday_vs_weekend_hourly_wait_time_trend.png" )
+    plot_top10_avg_wait_by_zone( df_spark=df_final_encoded,  save_path="top10_avg_wait_time_by_zone.png"  )
     plot_monthly_wait_trend(df_final_encoded)
-    plot_wait_time_geography(avg_wait_by_zone=avg_wait_by_zone,shapefile_path=r"F:\120\taxi\taxi_zones\taxi_zones.shp", save_path="NYC出租车区域平均等待时间分布图.png")
+    plot_wait_time_geography(avg_wait_by_zone=avg_wait_by_zone,shapefile_path=r"F:\120\taxi\taxi_zones\taxi_zones.shp", save_path="NYC_taxi_zone_average_wait_time_distribution.png")
